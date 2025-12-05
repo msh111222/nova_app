@@ -1,0 +1,76 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader('UTF-8') { reader ->
+        localProperties.load(reader)
+    }
+}
+
+def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
+if (flutterVersionCode == null) {
+    flutterVersionCode = '1'
+}
+
+def flutterVersionName = localProperties.getProperty('flutter.versionName')
+if (flutterVersionName == null) {
+    flutterVersionName = '1.0'
+}
+
+android {
+    // 必须与文件夹结构一致
+    namespace "com.novastar.sdkdemo"
+    compileSdkVersion flutter.compileSdkVersion
+    ndkVersion flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+        // 【核心配置】告诉安卓去 libs 文件夹找 .so 库
+        main {
+            jniLibs.srcDirs = ['libs']
+        }
+    }
+
+    defaultConfig {
+        // 【核心配置】包名必须对应
+        applicationId "com.novastar.sdkdemo"
+        minSdkVersion flutter.minSdkVersion // 为了兼容硬件SDK建议设为21
+        targetSdkVersion 28  // 降低以兼容诺瓦SDK的SELinux策略
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
+        
+        // 【核心配置】指定CPU架构，防止加载不到库崩溃
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a'
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.debug
+        }
+    }
+}
+
+flutter {
+    source '../..'
+}
+
+dependencies {
+    // 【核心配置】自动加载 libs 下所有的 jar 包 (JNA, ViplexCore等)
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+}
