@@ -35,6 +35,11 @@ class _NovaLoginScreenState extends State<NovaLoginScreen> {
     text: "SN2008@+",
   );
 
+  // 文字输入框
+  final TextEditingController _textController = TextEditingController(
+    text: "你好世界",
+  );
+
   String _logText = "等待操作...";
   bool _isConnecting = false;
   bool _isLoggedIn = false;
@@ -85,6 +90,41 @@ class _NovaLoginScreenState extends State<NovaLoginScreen> {
     } catch (e) {
       setState(() {
         _logText += "\n❌ 图片发送失败: $e";
+      });
+    } finally {
+      setState(() {
+        _isConnecting = false;
+      });
+    }
+  }
+
+  // 3. 发送文字
+  Future<void> _publishText() async {
+    FocusScope.of(context).unfocus();
+
+    if (_textController.text.isEmpty) {
+      setState(() {
+        _logText += "\n⚠️ 请输入要发送的文字";
+      });
+      return;
+    }
+
+    setState(() {
+      _isConnecting = true;
+      _logText += "\n\n正在发送文字: ${_textController.text}";
+    });
+
+    try {
+      final String result = await platform.invokeMethod('publishText', {
+        "sn": _snController.text,
+        "text": _textController.text,
+      });
+      setState(() {
+        _logText = "🎉 文字发送结果: $result";
+      });
+    } catch (e) {
+      setState(() {
+        _logText += "\n❌ 文字发送失败: $e";
       });
     } finally {
       setState(() {
@@ -158,6 +198,31 @@ class _NovaLoginScreenState extends State<NovaLoginScreen> {
                     : null,
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                 child: const Text("2. 发送图片 (4.png)"),
+              ),
+            ),
+
+            const SizedBox(height: 15),
+
+            // 文字输入框
+            TextField(
+              controller: _textController,
+              decoration: const InputDecoration(
+                labelText: "输入要发送的文字",
+                hintText: "例如：你好世界",
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            // 文字发送按钮
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: (_isLoggedIn && !_isConnecting)
+                    ? _publishText
+                    : null,
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                child: const Text("3. 发送文字 (Text)"),
               ),
             ),
 

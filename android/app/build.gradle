@@ -73,4 +73,6 @@ flutter {
 dependencies {
     // 【核心配置】自动加载 libs 下所有的 jar 包 (JNA, ViplexCore等)
     implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'androidx.window:window:1.0.0'
+    implementation 'androidx.window:window-java:1.0.0'
 }
