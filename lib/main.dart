@@ -162,7 +162,6 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
     }
   }
 
-  // 测试原版发送文字（只传 sn 和 text）
   Future<void> _testPublishText() async {
     setState(() {
       _isConnecting = true;
@@ -371,54 +370,74 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("NovaStar 节目编辑器")),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildLoginSection(),
-            Divider(height: 20),
-            Text(
-              "【节目画布】 LED: ${_ledWidth}x${_ledHeight}",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-            SizedBox(height: 8),
-            _buildLedCanvas(),
-            SizedBox(height: 10),
-            _buildAddButtons(),
-            Divider(height: 20),
-            _buildWindowList(),
-            Divider(height: 20),
-            if (_selectedWindow != null) _buildPropertyEditor(),
-            Divider(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed:
-                    (_isLoggedIn && !_isConnecting && _windows.isNotEmpty)
-                    ? _publishProgram
-                    : null,
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                child: Text(
-                  "📤 发送节目 (${_windows.length} 个窗口)",
-                  style: TextStyle(fontSize: 16),
+      body: Column(
+        children: [
+          // 画布区域 - 不滚动
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "【节目画布】 LED: ${_ledWidth}x${_ledHeight}",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
+                SizedBox(height: 8),
+                _buildLedCanvas(),
+                SizedBox(height: 5),
+                _buildCoordinateDisplay(),
+                SizedBox(height: 10),
+                _buildAddButtons(),
+              ],
+            ),
+          ),
+          Divider(height: 1),
+          // 其他内容 - 可滚动
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildLoginSection(),
+                  Divider(height: 20),
+                  _buildWindowList(),
+                  Divider(height: 20),
+                  if (_selectedWindow != null) _buildPropertyEditor(),
+                  Divider(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed:
+                          (_isLoggedIn && !_isConnecting && _windows.isNotEmpty)
+                          ? _publishProgram
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                      ),
+                      child: Text(
+                        "📤 发送节目 (${_windows.length} 个窗口)",
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 15),
+                  Container(
+                    width: double.infinity,
+                    height: 120,
+                    padding: EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    child: SingleChildScrollView(child: Text(_logText)),
+                  ),
+                ],
               ),
             ),
-            SizedBox(height: 15),
-            Container(
-              width: double.infinity,
-              height: 120,
-              padding: EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.grey[200],
-                borderRadius: BorderRadius.circular(5),
-              ),
-              child: SingleChildScrollView(child: Text(_logText)),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -463,174 +482,91 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
     );
   }
 
-  Widget _buildLedCanvas() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        double maxCanvasWidth = constraints.maxWidth;
-        double aspectRatio = _ledWidth / _ledHeight;
-        double canvasWidth = maxCanvasWidth;
-        double canvasHeight = canvasWidth / aspectRatio;
-
-        if (canvasHeight > 200) {
-          canvasHeight = 200;
-          canvasWidth = canvasHeight * aspectRatio;
-        }
-
-        double scale = canvasWidth / _ledWidth;
-
-        return Center(
-          child: Container(
-            width: canvasWidth,
-            height: canvasHeight,
-            decoration: BoxDecoration(
-              color: Colors.black,
-              border: Border.all(color: Colors.grey, width: 2),
-            ),
-            child: Stack(
-              children: _windows.map((window) {
-                return _buildWindowWidget(
-                  window,
-                  scale,
-                  canvasWidth,
-                  canvasHeight,
-                );
-              }).toList(),
-            ),
+  Widget _buildCoordinateDisplay() {
+    if (_selectedWindow == null) {
+      return SizedBox.shrink();
+    }
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.grey[200],
+        borderRadius: BorderRadius.circular(5),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          Text(
+            "X: ${_selectedWindow!.x}",
+            style: TextStyle(fontWeight: FontWeight.bold),
           ),
-        );
-      },
+          Text(
+            "Y: ${_selectedWindow!.y}",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          Text(
+            "W: ${_selectedWindow!.w}",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          Text(
+            "H: ${_selectedWindow!.h}",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildWindowWidget(
-    WindowItem window,
-    double scale,
-    double canvasWidth,
-    double canvasHeight,
-  ) {
-    bool isSelected = window.id == _selectedWindowId;
-    double boxLeft = window.x * scale;
-    double boxTop = window.y * scale;
-    double boxWidth = window.w * scale;
-    double boxHeight = window.h * scale;
+  Widget _buildLedCanvas() {
+    return RepaintBoundary(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          double maxCanvasWidth = constraints.maxWidth;
+          double aspectRatio = _ledWidth / _ledHeight;
+          double canvasWidth = maxCanvasWidth;
+          double canvasHeight = canvasWidth / aspectRatio;
 
-    Color borderColor;
-    Color bgColor;
-    IconData typeIcon;
+          if (canvasHeight > 200) {
+            canvasHeight = 200;
+            canvasWidth = canvasHeight * aspectRatio;
+          }
 
-    switch (window.type) {
-      case ContentType.text:
-        borderColor = Colors.blue;
-        bgColor = Colors.blue.withOpacity(0.3);
-        typeIcon = Icons.text_fields;
-        break;
-      case ContentType.image:
-        borderColor = Colors.green;
-        bgColor = Colors.green.withOpacity(0.3);
-        typeIcon = Icons.image;
-        break;
-      case ContentType.video:
-        borderColor = Colors.orange;
-        bgColor = Colors.orange.withOpacity(0.3);
-        typeIcon = Icons.videocam;
-        break;
-    }
+          double scale = canvasWidth / _ledWidth;
 
-    return Positioned(
-      left: boxLeft,
-      top: boxTop,
-      child: GestureDetector(
-        onTap: () {
-          setState(() {
-            _selectedWindowId = window.id;
-          });
-        },
-        onPanUpdate: (details) {
-          setState(() {
-            _selectedWindowId = window.id;
-            double newLeft = boxLeft + details.delta.dx;
-            double newTop = boxTop + details.delta.dy;
-            newLeft = newLeft.clamp(0, canvasWidth - boxWidth);
-            newTop = newTop.clamp(0, canvasHeight - boxHeight);
-            window.x = (newLeft / scale).round().clamp(0, _ledWidth - window.w);
-            window.y = (newTop / scale).round().clamp(0, _ledHeight - window.h);
-          });
-        },
-        child: Container(
-          width: boxWidth,
-          height: boxHeight,
-          decoration: BoxDecoration(
-            color: bgColor,
-            border: Border.all(
-              color: isSelected ? Colors.yellow : borderColor,
-              width: isSelected ? 3 : 2,
-            ),
-          ),
-          child: Stack(
-            children: [
-              Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(typeIcon, color: Colors.white, size: 16),
-                    SizedBox(height: 2),
-                    Text(
-                      window.type == ContentType.text
-                          ? window.text
-                          : window.fileName,
-                      style: TextStyle(color: Colors.white, fontSize: 10),
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
+          return Center(
+            child: Container(
+              width: canvasWidth,
+              height: canvasHeight,
+              decoration: BoxDecoration(
+                color: Colors.black,
+                border: Border.all(color: Colors.grey, width: 2),
               ),
-              if (isSelected)
-                Positioned(
-                  right: 0,
-                  bottom: 0,
-                  child: GestureDetector(
-                    onPanUpdate: (details) {
-                      setState(() {
-                        double newWidth = boxWidth + details.delta.dx;
-                        double newHeight = boxHeight + details.delta.dy;
-                        double minSize = 10 * scale;
-                        newWidth = newWidth.clamp(
-                          minSize,
-                          canvasWidth - boxLeft,
-                        );
-                        newHeight = newHeight.clamp(
-                          minSize,
-                          canvasHeight - boxTop,
-                        );
-                        window.w = (newWidth / scale).round().clamp(
-                          10,
-                          _ledWidth - window.x,
-                        );
-                        window.h = (newHeight / scale).round().clamp(
-                          10,
-                          _ledHeight - window.y,
-                        );
-                      });
-                    },
-                    child: Container(
-                      width: 20,
-                      height: 20,
-                      decoration: BoxDecoration(
-                        color: Colors.yellow,
-                        border: Border.all(color: Colors.orange, width: 1),
-                      ),
-                      child: Icon(
-                        Icons.open_in_full,
-                        size: 12,
-                        color: Colors.black,
-                      ),
+              child: Stack(
+                children: _windows.map((window) {
+                  return RepaintBoundary(
+                    child: _DraggableWindow(
+                      key: ValueKey(window.id),
+                      window: window,
+                      scale: scale,
+                      canvasWidth: canvasWidth,
+                      canvasHeight: canvasHeight,
+                      ledWidth: _ledWidth,
+                      ledHeight: _ledHeight,
+                      isSelected: window.id == _selectedWindowId,
+                      onTap: () {
+                        setState(() {
+                          _selectedWindowId = window.id;
+                        });
+                      },
+                      onDragEnd: () {
+                        setState(() {});
+                      },
                     ),
-                  ),
-                ),
-            ],
-          ),
-        ),
+                  );
+                }).toList(),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -1053,6 +989,210 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
           label: Text("更换视频"),
         ),
       ],
+    );
+  }
+}
+
+// 独立的可拖拽窗口组件
+class _DraggableWindow extends StatefulWidget {
+  final WindowItem window;
+  final double scale;
+  final double canvasWidth;
+  final double canvasHeight;
+  final int ledWidth;
+  final int ledHeight;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final VoidCallback onDragEnd;
+
+  const _DraggableWindow({
+    Key? key,
+    required this.window,
+    required this.scale,
+    required this.canvasWidth,
+    required this.canvasHeight,
+    required this.ledWidth,
+    required this.ledHeight,
+    required this.isSelected,
+    required this.onTap,
+    required this.onDragEnd,
+  }) : super(key: key);
+
+  @override
+  State<_DraggableWindow> createState() => _DraggableWindowState();
+}
+
+class _DraggableWindowState extends State<_DraggableWindow> {
+  double _left = 0;
+  double _top = 0;
+  double _width = 0;
+  double _height = 0;
+  bool _isDragging = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncFromWindow();
+  }
+
+  @override
+  void didUpdateWidget(_DraggableWindow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_isDragging) {
+      _syncFromWindow();
+    }
+  }
+
+  void _syncFromWindow() {
+    _left = widget.window.x * widget.scale;
+    _top = widget.window.y * widget.scale;
+    _width = widget.window.w * widget.scale;
+    _height = widget.window.h * widget.scale;
+  }
+
+  void _syncToWindow() {
+    widget.window.x = (_left / widget.scale).round().clamp(
+      0,
+      widget.ledWidth - widget.window.w,
+    );
+    widget.window.y = (_top / widget.scale).round().clamp(
+      0,
+      widget.ledHeight - widget.window.h,
+    );
+    widget.window.w = (_width / widget.scale).round().clamp(
+      10,
+      widget.ledWidth - widget.window.x,
+    );
+    widget.window.h = (_height / widget.scale).round().clamp(
+      10,
+      widget.ledHeight - widget.window.y,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Color borderColor;
+    Color bgColor;
+    IconData typeIcon;
+
+    switch (widget.window.type) {
+      case ContentType.text:
+        borderColor = Colors.blue;
+        bgColor = Colors.blue.withOpacity(0.3);
+        typeIcon = Icons.text_fields;
+        break;
+      case ContentType.image:
+        borderColor = Colors.green;
+        bgColor = Colors.green.withOpacity(0.3);
+        typeIcon = Icons.image;
+        break;
+      case ContentType.video:
+        borderColor = Colors.orange;
+        bgColor = Colors.orange.withOpacity(0.3);
+        typeIcon = Icons.videocam;
+        break;
+    }
+
+    return Positioned(
+      left: _left,
+      top: _top,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onTap,
+        onPanStart: (_) {
+          _isDragging = true;
+        },
+        onPanUpdate: (details) {
+          setState(() {
+            _left = (_left + details.delta.dx).clamp(
+              0.0,
+              widget.canvasWidth - _width,
+            );
+            _top = (_top + details.delta.dy).clamp(
+              0.0,
+              widget.canvasHeight - _height,
+            );
+            _syncToWindow();
+          });
+        },
+        onPanEnd: (_) {
+          _isDragging = false;
+          widget.onDragEnd();
+        },
+        child: Container(
+          width: _width,
+          height: _height,
+          decoration: BoxDecoration(
+            color: bgColor,
+            border: Border.all(
+              color: widget.isSelected ? Colors.yellow : borderColor,
+              width: widget.isSelected ? 3 : 2,
+            ),
+          ),
+          child: Stack(
+            children: [
+              Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(typeIcon, color: Colors.white, size: 16),
+                    SizedBox(height: 2),
+                    Text(
+                      widget.window.type == ContentType.text
+                          ? widget.window.text
+                          : widget.window.fileName,
+                      style: TextStyle(color: Colors.white, fontSize: 10),
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+              if (widget.isSelected)
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onPanStart: (_) {
+                      _isDragging = true;
+                    },
+                    onPanUpdate: (details) {
+                      setState(() {
+                        _width = (_width + details.delta.dx).clamp(
+                          10 * widget.scale,
+                          widget.canvasWidth - _left,
+                        );
+                        _height = (_height + details.delta.dy).clamp(
+                          10 * widget.scale,
+                          widget.canvasHeight - _top,
+                        );
+                        _syncToWindow();
+                      });
+                    },
+                    onPanEnd: (_) {
+                      _isDragging = false;
+                      widget.onDragEnd();
+                    },
+                    child: Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: Colors.yellow,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Icon(
+                        Icons.open_in_full,
+                        size: 14,
+                        color: Colors.black,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
