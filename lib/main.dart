@@ -111,6 +111,15 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
     text: "SN2008@+",
   );
 
+  // 修复：为属性编辑器创建持久化的 controller
+  final TextEditingController _textContentController = TextEditingController();
+  final TextEditingController _fontSizeController = TextEditingController();
+  final TextEditingController _scrollSpeedController = TextEditingController();
+  final TextEditingController _xController = TextEditingController();
+  final TextEditingController _yController = TextEditingController();
+  final TextEditingController _wController = TextEditingController();
+  final TextEditingController _hController = TextEditingController();
+
   String _logText = "等待操作...";
   bool _isConnecting = false;
   bool _isLoggedIn = false;
@@ -127,6 +136,50 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
       return _windows.firstWhere((w) => w.id == _selectedWindowId);
     } catch (e) {
       return null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _snController.dispose();
+    _userController.dispose();
+    _passController.dispose();
+    _textContentController.dispose();
+    _fontSizeController.dispose();
+    _scrollSpeedController.dispose();
+    _xController.dispose();
+    _yController.dispose();
+    _wController.dispose();
+    _hController.dispose();
+    super.dispose();
+  }
+
+  // 当选中窗口变化时，更新 controller 的值
+  void _updateControllersFromWindow() {
+    final window = _selectedWindow;
+    if (window == null) return;
+
+    // 只在值不同时更新，避免打断用户输入
+    if (_textContentController.text != window.text) {
+      _textContentController.text = window.text;
+    }
+    if (_fontSizeController.text != window.fontSize.toString()) {
+      _fontSizeController.text = window.fontSize.toString();
+    }
+    if (_scrollSpeedController.text != window.scrollSpeed.toString()) {
+      _scrollSpeedController.text = window.scrollSpeed.toString();
+    }
+    if (_xController.text != window.x.toString()) {
+      _xController.text = window.x.toString();
+    }
+    if (_yController.text != window.y.toString()) {
+      _yController.text = window.y.toString();
+    }
+    if (_wController.text != window.w.toString()) {
+      _wController.text = window.w.toString();
+    }
+    if (_hController.text != window.h.toString()) {
+      _hController.text = window.h.toString();
     }
   }
 
@@ -189,19 +242,20 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
   }
 
   void _addTextWindow() {
+    final newWindow = WindowItem(
+      id: _generateId(),
+      type: ContentType.text,
+      x: 0,
+      y: 0,
+      w: _ledWidth ~/ 2,
+      h: _ledHeight ~/ 2,
+      text: "新文字${_windows.length + 1}",
+    );
     setState(() {
-      final newWindow = WindowItem(
-        id: _generateId(),
-        type: ContentType.text,
-        x: 0,
-        y: 0,
-        w: _ledWidth ~/ 2,
-        h: _ledHeight ~/ 2,
-        text: "新文字${_windows.length + 1}",
-      );
       _windows.add(newWindow);
       _selectedWindowId = newWindow.id;
     });
+    _updateControllersFromWindow();
   }
 
   Future<void> _addImageWindow() async {
@@ -214,20 +268,21 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
       String filePath = result.files.single.path!;
       String fileName = result.files.single.name;
 
+      final newWindow = WindowItem(
+        id: _generateId(),
+        type: ContentType.image,
+        x: 0,
+        y: 0,
+        w: _ledWidth,
+        h: _ledHeight ~/ 2,
+        filePath: filePath,
+        fileName: fileName,
+      );
       setState(() {
-        final newWindow = WindowItem(
-          id: _generateId(),
-          type: ContentType.image,
-          x: 0,
-          y: 0,
-          w: _ledWidth,
-          h: _ledHeight ~/ 2,
-          filePath: filePath,
-          fileName: fileName,
-        );
         _windows.add(newWindow);
         _selectedWindowId = newWindow.id;
       });
+      _updateControllersFromWindow();
     } catch (e) {
       setState(() {
         _logText = "❌ 选择图片失败: $e";
@@ -245,20 +300,21 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
       String filePath = result.files.single.path!;
       String fileName = result.files.single.name;
 
+      final newWindow = WindowItem(
+        id: _generateId(),
+        type: ContentType.video,
+        x: 0,
+        y: 0,
+        w: _ledWidth,
+        h: _ledHeight ~/ 2,
+        filePath: filePath,
+        fileName: fileName,
+      );
       setState(() {
-        final newWindow = WindowItem(
-          id: _generateId(),
-          type: ContentType.video,
-          x: 0,
-          y: 0,
-          w: _ledWidth,
-          h: _ledHeight ~/ 2,
-          filePath: filePath,
-          fileName: fileName,
-        );
         _windows.add(newWindow);
         _selectedWindowId = newWindow.id;
       });
+      _updateControllersFromWindow();
     } catch (e) {
       setState(() {
         _logText = "❌ 选择视频失败: $e";
@@ -272,6 +328,14 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
       _windows.removeWhere((w) => w.id == _selectedWindowId);
       _selectedWindowId = _windows.isNotEmpty ? _windows.last.id : null;
     });
+    _updateControllersFromWindow();
+  }
+
+  void _selectWindow(String id) {
+    setState(() {
+      _selectedWindowId = id;
+    });
+    _updateControllersFromWindow();
   }
 
   Future<void> _publishProgram() async {
@@ -368,6 +432,7 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
 
   void _onWindowUpdated() {
     setState(() {});
+    _updateControllersFromWindow();
   }
 
   @override
@@ -553,11 +618,7 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
                   ledWidth: _ledWidth,
                   ledHeight: _ledHeight,
                   isSelected: window.id == _selectedWindowId,
-                  onTap: () {
-                    setState(() {
-                      _selectedWindowId = window.id;
-                    });
-                  },
+                  onTap: () => _selectWindow(window.id),
                   onUpdated: _onWindowUpdated,
                 );
               }).toList(),
@@ -671,17 +732,11 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
               trailing: IconButton(
                 icon: Icon(Icons.delete, color: Colors.red),
                 onPressed: () {
-                  setState(() {
-                    _selectedWindowId = window.id;
-                  });
+                  _selectWindow(window.id);
                   _deleteSelectedWindow();
                 },
               ),
-              onTap: () {
-                setState(() {
-                  _selectedWindowId = window.id;
-                });
-              },
+              onTap: () => _selectWindow(window.id),
             ),
           );
         }).toList(),
@@ -720,45 +775,70 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
             ],
           ),
           SizedBox(height: 10),
+          // 位置和大小编辑
           Row(
             children: [
               Expanded(
-                child: _buildNumberField(
-                  "X",
-                  window.x,
-                  (v) => window.x = v,
-                  0,
-                  _ledWidth - window.w,
+                child: TextField(
+                  controller: _xController,
+                  decoration: InputDecoration(labelText: "X", isDense: true),
+                  keyboardType: TextInputType.number,
+                  onChanged: (v) {
+                    int? val = int.tryParse(v);
+                    if (val != null) {
+                      setState(() {
+                        window.x = val.clamp(0, _ledWidth - window.w);
+                      });
+                    }
+                  },
                 ),
               ),
               SizedBox(width: 8),
               Expanded(
-                child: _buildNumberField(
-                  "Y",
-                  window.y,
-                  (v) => window.y = v,
-                  0,
-                  _ledHeight - window.h,
+                child: TextField(
+                  controller: _yController,
+                  decoration: InputDecoration(labelText: "Y", isDense: true),
+                  keyboardType: TextInputType.number,
+                  onChanged: (v) {
+                    int? val = int.tryParse(v);
+                    if (val != null) {
+                      setState(() {
+                        window.y = val.clamp(0, _ledHeight - window.h);
+                      });
+                    }
+                  },
                 ),
               ),
               SizedBox(width: 8),
               Expanded(
-                child: _buildNumberField(
-                  "W",
-                  window.w,
-                  (v) => window.w = v,
-                  10,
-                  _ledWidth - window.x,
+                child: TextField(
+                  controller: _wController,
+                  decoration: InputDecoration(labelText: "W", isDense: true),
+                  keyboardType: TextInputType.number,
+                  onChanged: (v) {
+                    int? val = int.tryParse(v);
+                    if (val != null) {
+                      setState(() {
+                        window.w = val.clamp(10, _ledWidth - window.x);
+                      });
+                    }
+                  },
                 ),
               ),
               SizedBox(width: 8),
               Expanded(
-                child: _buildNumberField(
-                  "H",
-                  window.h,
-                  (v) => window.h = v,
-                  10,
-                  _ledHeight - window.y,
+                child: TextField(
+                  controller: _hController,
+                  decoration: InputDecoration(labelText: "H", isDense: true),
+                  keyboardType: TextInputType.number,
+                  onChanged: (v) {
+                    int? val = int.tryParse(v);
+                    if (val != null) {
+                      setState(() {
+                        window.h = val.clamp(10, _ledHeight - window.y);
+                      });
+                    }
+                  },
                 ),
               ),
             ],
@@ -774,38 +854,22 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
     );
   }
 
-  Widget _buildNumberField(
-    String label,
-    int value,
-    Function(int) onChanged,
-    int min,
-    int max,
-  ) {
-    return TextField(
-      decoration: InputDecoration(labelText: label, isDense: true),
-      keyboardType: TextInputType.number,
-      controller: TextEditingController(text: value.toString()),
-      onChanged: (v) {
-        int? parsed = int.tryParse(v);
-        if (parsed != null) {
-          setState(() {
-            onChanged(parsed.clamp(min, max));
-          });
-        }
-      },
-    );
-  }
-
   Widget _buildTextPropertyEditor(WindowItem window) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // 文字内容
         TextField(
+          controller: _textContentController,
           decoration: InputDecoration(labelText: "文字内容"),
-          controller: TextEditingController(text: window.text),
-          onChanged: (v) => setState(() => window.text = v),
+          onChanged: (v) {
+            setState(() {
+              window.text = v;
+            });
+          },
         ),
         SizedBox(height: 10),
+        // 字体和字号
         Row(
           children: [
             Expanded(
@@ -820,24 +884,33 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
                       ),
                     )
                     .toList(),
-                onChanged: (v) => setState(() => window.fontFamily = v!),
+                onChanged: (v) {
+                  setState(() {
+                    window.fontFamily = v!;
+                  });
+                },
               ),
             ),
             SizedBox(width: 8),
             Expanded(
               child: TextField(
+                controller: _fontSizeController,
                 decoration: InputDecoration(labelText: "字号", isDense: true),
                 keyboardType: TextInputType.number,
-                controller: TextEditingController(
-                  text: window.fontSize.toString(),
-                ),
-                onChanged: (v) =>
-                    setState(() => window.fontSize = int.tryParse(v) ?? 20),
+                onChanged: (v) {
+                  int? val = int.tryParse(v);
+                  if (val != null && val > 0) {
+                    setState(() {
+                      window.fontSize = val;
+                    });
+                  }
+                },
               ),
             ),
           ],
         ),
         SizedBox(height: 10),
+        // 颜色选择
         Row(
           children: [
             Text("字色: "),
@@ -881,21 +954,31 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
           ],
         ),
         SizedBox(height: 10),
+        // 静止和首尾相连
         Row(
           children: [
             Checkbox(
               value: window.isStatic,
-              onChanged: (v) => setState(() => window.isStatic = v!),
+              onChanged: (v) {
+                setState(() {
+                  window.isStatic = v!;
+                });
+              },
             ),
             Text("静止"),
             SizedBox(width: 15),
             Checkbox(
               value: window.isHeadTail,
-              onChanged: (v) => setState(() => window.isHeadTail = v!),
+              onChanged: (v) {
+                setState(() {
+                  window.isHeadTail = v!;
+                });
+              },
             ),
             Text("首尾相连"),
           ],
         ),
+        // 滚动方向和速度
         if (!window.isStatic)
           Row(
             children: [
@@ -917,20 +1000,27 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
                             ),
                           )
                           .toList(),
-                  onChanged: (v) => setState(() => window.scrollDirection = v!),
+                  onChanged: (v) {
+                    setState(() {
+                      window.scrollDirection = v!;
+                    });
+                  },
                 ),
               ),
               SizedBox(width: 8),
               Expanded(
                 child: TextField(
+                  controller: _scrollSpeedController,
                   decoration: InputDecoration(labelText: "速度", isDense: true),
                   keyboardType: TextInputType.number,
-                  controller: TextEditingController(
-                    text: window.scrollSpeed.toString(),
-                  ),
-                  onChanged: (v) => setState(
-                    () => window.scrollSpeed = double.tryParse(v) ?? 3.0,
-                  ),
+                  onChanged: (v) {
+                    double? val = double.tryParse(v);
+                    if (val != null && val > 0) {
+                      setState(() {
+                        window.scrollSpeed = val;
+                      });
+                    }
+                  },
                 ),
               ),
             ],
@@ -990,7 +1080,7 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
   }
 }
 
-// ==================== 可拖拽窗口组件 ====================
+// ==================== 可拖拽窗口组件（带实时预览）====================
 
 class _DraggableWindow extends StatefulWidget {
   final WindowItem window;
@@ -1072,33 +1162,37 @@ class _DraggableWindowState extends State<_DraggableWindow> {
 
   @override
   Widget build(BuildContext context) {
+    final window = widget.window;
+
+    // 根据内容类型设置颜色和图标
     Color borderColor;
-    Color bgColor;
     IconData typeIcon;
 
-    switch (widget.window.type) {
+    switch (window.type) {
       case ContentType.text:
         borderColor = Colors.blue;
-        bgColor = Colors.blue.withOpacity(0.3);
         typeIcon = Icons.text_fields;
         break;
       case ContentType.image:
         borderColor = Colors.green;
-        bgColor = Colors.green.withOpacity(0.3);
         typeIcon = Icons.image;
         break;
       case ContentType.video:
         borderColor = Colors.orange;
-        bgColor = Colors.orange.withOpacity(0.3);
         typeIcon = Icons.videocam;
         break;
     }
 
-    // 控制点放在外层 Stack，和窗口平级，优先响应触摸
+    // 计算预览字体大小（根据缩放比例）
+    double previewFontSize = (window.fontSize * widget.scale * 0.5).clamp(
+      6.0,
+      20.0,
+    );
+
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        // 1. 窗口主体
+        // 窗口主体
         Positioned(
           left: _left,
           top: _top,
@@ -1125,34 +1219,25 @@ class _DraggableWindowState extends State<_DraggableWindow> {
               width: _width,
               height: _height,
               decoration: BoxDecoration(
-                color: bgColor,
+                // 使用窗口背景色
+                color: window.type == ContentType.text
+                    ? (window.windowBgColor == Colors.transparent
+                          ? Colors.black.withOpacity(0.3)
+                          : window.windowBgColor.withOpacity(0.8))
+                    : borderColor.withOpacity(0.3),
                 border: Border.all(
                   color: widget.isSelected ? Colors.yellow : borderColor,
                   width: widget.isSelected ? 3 : 2,
                 ),
               ),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(typeIcon, color: Colors.white, size: 16),
-                    SizedBox(height: 2),
-                    Text(
-                      widget.window.type == ContentType.text
-                          ? widget.window.text
-                          : widget.window.fileName,
-                      style: TextStyle(color: Colors.white, fontSize: 10),
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
+              child: ClipRect(
+                child: _buildWindowContent(window, typeIcon, previewFontSize),
               ),
             ),
           ),
         ),
 
-        // 2. 四个角的控制点（选中时显示，层级高于窗口）
+        // 四个角的控制点
         if (widget.isSelected) ...[
           _buildCornerHandle('topLeft'),
           _buildCornerHandle('topRight'),
@@ -1161,6 +1246,61 @@ class _DraggableWindowState extends State<_DraggableWindow> {
         ],
       ],
     );
+  }
+
+  // 构建窗口内容预览
+  Widget _buildWindowContent(
+    WindowItem window,
+    IconData typeIcon,
+    double previewFontSize,
+  ) {
+    if (window.type == ContentType.text) {
+      // 文字类型：显示实际文字内容和样式
+      return Container(
+        padding: EdgeInsets.all(2),
+        alignment: Alignment.center,
+        child: Text(
+          window.text.isEmpty ? "文字" : window.text,
+          style: TextStyle(
+            color: window.fontColor,
+            fontSize: previewFontSize,
+            fontFamily: window.fontFamily,
+            fontWeight: window.fontStyle == "BOLD"
+                ? FontWeight.bold
+                : FontWeight.normal,
+            fontStyle: window.fontStyle == "ITALIC"
+                ? FontStyle.italic
+                : FontStyle.normal,
+            backgroundColor: window.fontBgColor == Colors.transparent
+                ? null
+                : window.fontBgColor,
+            letterSpacing: window.letterSpacing.toDouble() * widget.scale * 0.1,
+          ),
+          overflow: TextOverflow.ellipsis,
+          maxLines: 3,
+          textAlign: TextAlign.center,
+        ),
+      );
+    } else {
+      // 图片/视频类型：显示图标和文件名
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(typeIcon, color: Colors.white, size: 16),
+            SizedBox(height: 2),
+            Text(
+              window.fileName.isEmpty
+                  ? (window.type == ContentType.image ? "图片" : "视频")
+                  : window.fileName,
+              style: TextStyle(color: Colors.white, fontSize: 8),
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   Widget _buildCornerHandle(String corner) {
