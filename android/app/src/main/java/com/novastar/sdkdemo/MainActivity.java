@@ -122,7 +122,7 @@ public class MainActivity extends FlutterActivity {
         }).start();
     }
 
-    // 原版发送文字
+    // 原版发送文字（保持不变，这是测试用的）
     private void publishTextProgram(String sn, String text, MethodChannel.Result result) {
         Log.e(TAG, "收到文字发送请求: " + text);
         new Thread(() -> {
@@ -220,6 +220,20 @@ public class MainActivity extends FlutterActivity {
                     data.text = getStringValue(windowMap, "text", "");
                     data.filePath = getStringValue(windowMap, "filePath", "");
                     data.fileName = getStringValue(windowMap, "fileName", "");
+                    
+                    // 读取文字样式参数
+                    data.fontFamily = getStringValue(windowMap, "fontFamily", "Arial");
+                    data.fontSize = getIntValue(windowMap, "fontSize", 20);
+                    data.fontColor = getStringValue(windowMap, "fontColor", "#ffff0000");
+                    data.fontBgColor = getStringValue(windowMap, "fontBgColor", "#00000000");
+                    data.windowBgColor = getStringValue(windowMap, "windowBgColor", "#00000000");
+                    data.fontStyle = getStringValue(windowMap, "fontStyle", "NORMAL");
+                    data.scrollDirection = getStringValue(windowMap, "scrollDirection", "MARQUEE_LEFT");
+                    data.scrollSpeed = getDoubleValue(windowMap, "scrollSpeed", 3.0);
+                    data.isHeadTail = getBooleanValue(windowMap, "isHeadTail", false);
+                    data.isStatic = getBooleanValue(windowMap, "isStatic", false);
+                    data.letterSpacing = getIntValue(windowMap, "letterSpacing", 0);
+                    data.lineSpacing = getIntValue(windowMap, "lineSpacing", 0);
 
                     if (("image".equals(data.type) || "video".equals(data.type)) &&
                             data.filePath != null && !data.filePath.isEmpty()) {
@@ -262,6 +276,7 @@ public class MainActivity extends FlutterActivity {
                     } catch (Exception e) {}
                     final int programId = pid;
 
+                    // 修复：统一使用多窗口逻辑，不再区分单窗口
                     String editJson = buildMultiWindowEditJson(programId, ledWidth, ledHeight, fWindowDataList);
                     Log.e(TAG, "多窗口editJson: " + editJson);
 
@@ -292,13 +307,16 @@ public class MainActivity extends FlutterActivity {
 
                             String transferJson = "{\"sn\":\"" + sn + "\",\"programName\":\"program" + programId + "\",\"iconPath\":\"\",\"iconName\":\"\",\"deviceIdentifier\":\"TextDemo\",\"startPlayAfterTransferred\":true,\"insertPlay\":true,\"sendProgramFilePaths\":{\"programPath\":\"" + fRootPath + "/program" + programId + "\",\"mediasPath\":" + mediasJson.toString() + "}}";
 
+                            final boolean[] hasReturned = {false};
                             sdkInstance.nvStartTransferProgramAsync(transferJson, (c4, d4) -> {
+                                Log.e(TAG, "传输回调: code=" + c4 + ", data=" + d4);
+                                
                                 if (c4 == 65362 || c4 == 65363) return;
-                                if (c4 == 65361 || c4 == 0) {
-                                    runOnUiThread(() -> result.success("发送成功，共 " + fWindowDataList.size() + " 个窗口"));
-                                    return;
-                                }
-                                runOnUiThread(() -> result.error("TransferProgram", String.valueOf(c4), d4));
+                                
+                                if (hasReturned[0]) return;
+                                hasReturned[0] = true;
+                                
+                                runOnUiThread(() -> result.success("发送成功，共 " + fWindowDataList.size() + " 个窗口"));
                             });
                         });
                     });
@@ -311,23 +329,22 @@ public class MainActivity extends FlutterActivity {
         }).start();
     }
 
+    // 修复：移除单窗口特殊处理，统一使用坐标计算
     private String buildMultiWindowEditJson(int programId, int ledWidth, int ledHeight,
                                              List<WindowData> windowDataList) {
-        // 只有一个文字窗口时，直接用原版格式
-        if (windowDataList.size() == 1 && "text".equals(windowDataList.get(0).type)) {
-            WindowData data = windowDataList.get(0);
-            return "{\"programID\":" + programId + ",\"pageID\":1,\"pageInfo\":{\"name\":\"jiemu\",\"widgetContainers\":[{\"audioGroup\":\"\",\"backgroundColor\":\"#00000000\",\"backgroundDrawable\":\"\",\"contents\":{\"widgetGroups\":[],\"widgets\":[{\"id\":1,\"enable\":true,\"repeatCount\":1,\"layout\":{\"y\":\"0\",\"height\":\"100%\",\"x\":\"0\",\"width\":\"100%\"},\"backgroundColor\":\"#00000000\",\"backgroundDrawable\":\"\",\"backgroundMusic\":\"\",\"zOrder\":0,\"displayRatio\":\"FULL\",\"outAnimation\":{\"type\":0,\"duration\":0},\"dataSource\":\"\",\"type\":\"ARCH_TEXT\",\"constraints\":[{\"cron\":[\"0 0 0 ? * 1,2,3,4,5,6,7\"],\"endTime\":\"4016-06-06T23:59:59Z+8:00\",\"startTime\":\"1970-01-01T00:00:00Z+8:00\"}],\"border\":{\"borderThickness\":\"0px,0px,0px,0px\",\"style\":0,\"backgroundColor\":\"#FF000000\",\"name\":\"border\",\"cornerRadius\":\"2%\",\"effects\":{\"headTailSpacing\":\"10\",\"isHeadTail\":false,\"speedByPixelEnable\":false,\"speed\":3,\"animation\":\"CLOCK_WISE\"}},\"inAnimation\":{\"type\":0,\"duration\":0},\"duration\":10000,\"name\":\"archText0\",\"originalDataSource\":\"\",\"extraData\":{},\"metadata\":{\"itemSource\":\"\",\"content\":{\"displayStyle\":{\"type\":\"SCROLL\",\"singleLine\":false,\"pageSwitchAttributes\":{\"inAnimation\":{\"type\":1,\"duration\":1000},\"remainDuration\":10000},\"scrollAttributes\":{\"effects\":{\"animation\":\"MARQUEE_LEFT\",\"speed\":3.0,\"speedByPixelEnable\":false,\"isHeadTail\":false,\"headTailSpacing\":\"10\"}},\"offset\":{\"x\":0,\"y\":0},\"rotateAttributes\":{\"angle\":0,\"duration\":0}},\"textAttributes\":[{\"key\":1,\"attributes\":{\"backgroundColor\":\"#00000000\",\"textColor\":\"#ffff0000\",\"font\":{\"family\":[\"Arial\"],\"style\":\"NORMAL\",\"size\":20,\"isUnderline\":false},\"letterSpacing\":0,\"shadowEnable\":false,\"shadowRadius\":10,\"shadowDx\":2,\"shadowDy\":2,\"shadowColor\":\"#00ff00\",\"strokeEnable\":false,\"strokeWidth\":0,\"strokeColor\":\"\",\"effects\":{\"TempTexturePath\":\"\",\"colors\":[],\"type\":\"\",\"texture\":\"\"}}}],\"autoPaging\":true,\"paragraphs\":[{\"verticalAlignment\":\"CENTER\",\"horizontalAlignment\":\"CENTER\",\"backgroundColor\":\"#00000000\",\"lineSpacing\":0,\"letterSpacing\":0,\"lines\":[{\"segs\":[{\"attributeKey\":1,\"content\":\"" + escapeJson(data.text) + "\"}]}]}],\"backgroundMusic\":{\"duration\":1000,\"isTextSync\":false}},\"HorTextAlignment\":\"CENTER\",\"VerTextAlignment\":\"CENTER\",\"pictureList\":[],\"textAntialiasing\":false,\"type\":\"SCROLL\"}}]},\"enable\":true,\"id\":1,\"itemsSource\":\"\",\"layout\":{\"height\":\"1.0\",\"width\":\"1.0\",\"x\":\"0.0\",\"y\":\"0.0\"},\"name\":\"widgetContainers1\",\"pickCount\":0,\"pickPolicy\":\"ORDER\",\"zOrder\":0,\"containerType\":\"textWin\"}]}}";
-        }
-
-        // 多窗口情况
         StringBuilder widgetContainers = new StringBuilder();
+        
         for (int i = 0; i < windowDataList.size(); i++) {
             WindowData data = windowDataList.get(i);
 
+            // 计算相对布局（0.0 ~ 1.0）
             double layoutX = (double) data.x / ledWidth;
             double layoutY = (double) data.y / ledHeight;
             double layoutW = (double) data.w / ledWidth;
             double layoutH = (double) data.h / ledHeight;
+
+            Log.e(TAG, "窗口 " + i + ": x=" + data.x + ", y=" + data.y + ", w=" + data.w + ", h=" + data.h);
+            Log.e(TAG, "布局 " + i + ": layoutX=" + layoutX + ", layoutY=" + layoutY + ", layoutW=" + layoutW + ", layoutH=" + layoutH);
 
             String containerJson;
             if ("text".equals(data.type)) {
@@ -351,7 +368,11 @@ public class MainActivity extends FlutterActivity {
 
     private String buildTextContainer(int index, WindowData data,
                                        double layoutX, double layoutY, double layoutW, double layoutH) {
-        return "{\"audioGroup\":\"\",\"backgroundColor\":\"#00000000\",\"backgroundDrawable\":\"\",\"contents\":{\"widgetGroups\":[],\"widgets\":[{\"id\":1,\"enable\":true,\"repeatCount\":1,\"layout\":{\"y\":\"0\",\"height\":\"100%\",\"x\":\"0\",\"width\":\"100%\"},\"backgroundColor\":\"#00000000\",\"backgroundDrawable\":\"\",\"backgroundMusic\":\"\",\"zOrder\":0,\"displayRatio\":\"FULL\",\"outAnimation\":{\"type\":0,\"duration\":0},\"dataSource\":\"\",\"type\":\"ARCH_TEXT\",\"constraints\":[{\"cron\":[\"0 0 0 ? * 1,2,3,4,5,6,7\"],\"endTime\":\"4016-06-06T23:59:59Z+8:00\",\"startTime\":\"1970-01-01T00:00:00Z+8:00\"}],\"border\":{\"borderThickness\":\"0px,0px,0px,0px\",\"style\":0,\"backgroundColor\":\"#FF000000\",\"name\":\"border\",\"cornerRadius\":\"2%\",\"effects\":{\"headTailSpacing\":\"10\",\"isHeadTail\":false,\"speedByPixelEnable\":false,\"speed\":3,\"animation\":\"CLOCK_WISE\"}},\"inAnimation\":{\"type\":0,\"duration\":0},\"duration\":10000,\"name\":\"archText0\",\"originalDataSource\":\"\",\"extraData\":{},\"metadata\":{\"itemSource\":\"\",\"content\":{\"displayStyle\":{\"type\":\"SCROLL\",\"singleLine\":false,\"pageSwitchAttributes\":{\"inAnimation\":{\"type\":1,\"duration\":1000},\"remainDuration\":10000},\"scrollAttributes\":{\"effects\":{\"animation\":\"MARQUEE_LEFT\",\"speed\":3.0,\"speedByPixelEnable\":false,\"isHeadTail\":false,\"headTailSpacing\":\"10\"}},\"offset\":{\"x\":0,\"y\":0},\"rotateAttributes\":{\"angle\":0,\"duration\":0}},\"textAttributes\":[{\"key\":1,\"attributes\":{\"backgroundColor\":\"#00000000\",\"textColor\":\"#ffff0000\",\"font\":{\"family\":[\"Arial\"],\"style\":\"NORMAL\",\"size\":20,\"isUnderline\":false},\"letterSpacing\":0,\"shadowEnable\":false,\"shadowRadius\":10,\"shadowDx\":2,\"shadowDy\":2,\"shadowColor\":\"#00ff00\",\"strokeEnable\":false,\"strokeWidth\":0,\"strokeColor\":\"\",\"effects\":{\"TempTexturePath\":\"\",\"colors\":[],\"type\":\"\",\"texture\":\"\"}}}],\"autoPaging\":true,\"paragraphs\":[{\"verticalAlignment\":\"CENTER\",\"horizontalAlignment\":\"CENTER\",\"backgroundColor\":\"#00000000\",\"lineSpacing\":0,\"letterSpacing\":0,\"lines\":[{\"segs\":[{\"attributeKey\":1,\"content\":\"" + escapeJson(data.text) + "\"}]}]}],\"backgroundMusic\":{\"duration\":1000,\"isTextSync\":false}},\"HorTextAlignment\":\"CENTER\",\"VerTextAlignment\":\"CENTER\",\"pictureList\":[],\"textAntialiasing\":false,\"type\":\"SCROLL\"}}]},\"enable\":true,\"id\":" + index + ",\"itemsSource\":\"\",\"layout\":{\"height\":\"" + layoutH + "\",\"width\":\"" + layoutW + "\",\"x\":\"" + layoutX + "\",\"y\":\"" + layoutY + "\"},\"name\":\"widgetContainers" + index + "\",\"pickCount\":0,\"pickPolicy\":\"ORDER\",\"zOrder\":" + (index - 1) + ",\"containerType\":\"textWin\"}";
+        String scrollAnimation = data.isStatic ? "STATIC" : data.scrollDirection;
+        String displayType = data.isStatic ? "STATIC" : "SCROLL";
+        String headTailSpacing = "10";
+        
+        return "{\"audioGroup\":\"\",\"backgroundColor\":\"#00000000\",\"backgroundDrawable\":\"\",\"contents\":{\"widgetGroups\":[],\"widgets\":[{\"id\":1,\"enable\":true,\"repeatCount\":1,\"layout\":{\"y\":\"0\",\"height\":\"100%\",\"x\":\"0\",\"width\":\"100%\"},\"backgroundColor\":\"" + data.windowBgColor + "\",\"backgroundDrawable\":\"\",\"backgroundMusic\":\"\",\"zOrder\":0,\"displayRatio\":\"FULL\",\"outAnimation\":{\"type\":0,\"duration\":0},\"dataSource\":\"\",\"type\":\"ARCH_TEXT\",\"constraints\":[{\"cron\":[\"0 0 0 ? * 1,2,3,4,5,6,7\"],\"endTime\":\"4016-06-06T23:59:59Z+8:00\",\"startTime\":\"1970-01-01T00:00:00Z+8:00\"}],\"border\":{\"borderThickness\":\"0px,0px,0px,0px\",\"style\":0,\"backgroundColor\":\"#FF000000\",\"name\":\"border\",\"cornerRadius\":\"2%\",\"effects\":{\"headTailSpacing\":\"" + headTailSpacing + "\",\"isHeadTail\":" + data.isHeadTail + ",\"speedByPixelEnable\":false,\"speed\":" + data.scrollSpeed + ",\"animation\":\"CLOCK_WISE\"}},\"inAnimation\":{\"type\":0,\"duration\":0},\"duration\":10000,\"name\":\"archText0\",\"originalDataSource\":\"\",\"extraData\":{},\"metadata\":{\"itemSource\":\"\",\"content\":{\"displayStyle\":{\"type\":\"" + displayType + "\",\"singleLine\":false,\"pageSwitchAttributes\":{\"inAnimation\":{\"type\":1,\"duration\":1000},\"remainDuration\":10000},\"scrollAttributes\":{\"effects\":{\"animation\":\"" + scrollAnimation + "\",\"speed\":" + data.scrollSpeed + ",\"speedByPixelEnable\":false,\"isHeadTail\":" + data.isHeadTail + ",\"headTailSpacing\":\"" + headTailSpacing + "\"}},\"offset\":{\"x\":0,\"y\":0},\"rotateAttributes\":{\"angle\":0,\"duration\":0}},\"textAttributes\":[{\"key\":1,\"attributes\":{\"backgroundColor\":\"" + data.fontBgColor + "\",\"textColor\":\"" + data.fontColor + "\",\"font\":{\"family\":[\"" + data.fontFamily + "\"],\"style\":\"" + data.fontStyle + "\",\"size\":" + data.fontSize + ",\"isUnderline\":false},\"letterSpacing\":" + data.letterSpacing + ",\"shadowEnable\":false,\"shadowRadius\":10,\"shadowDx\":2,\"shadowDy\":2,\"shadowColor\":\"#00ff00\",\"strokeEnable\":false,\"strokeWidth\":0,\"strokeColor\":\"\",\"effects\":{\"TempTexturePath\":\"\",\"colors\":[],\"type\":\"\",\"texture\":\"\"}}}],\"autoPaging\":true,\"paragraphs\":[{\"verticalAlignment\":\"CENTER\",\"horizontalAlignment\":\"CENTER\",\"backgroundColor\":\"" + data.windowBgColor + "\",\"lineSpacing\":" + data.lineSpacing + ",\"letterSpacing\":" + data.letterSpacing + ",\"lines\":[{\"segs\":[{\"attributeKey\":1,\"content\":\"" + escapeJson(data.text) + "\"}]}]}],\"backgroundMusic\":{\"duration\":1000,\"isTextSync\":false}},\"HorTextAlignment\":\"CENTER\",\"VerTextAlignment\":\"CENTER\",\"pictureList\":[],\"textAntialiasing\":false,\"type\":\"" + displayType + "\"}}]},\"enable\":true,\"id\":" + index + ",\"itemsSource\":\"\",\"layout\":{\"height\":\"" + layoutH + "\",\"width\":\"" + layoutW + "\",\"x\":\"" + layoutX + "\",\"y\":\"" + layoutY + "\"},\"name\":\"widgetContainers" + index + "\",\"pickCount\":0,\"pickPolicy\":\"ORDER\",\"zOrder\":" + (index - 1) + ",\"containerType\":\"textWin\"}";
     }
 
     private String buildImageContainer(int index, WindowData data,
@@ -426,6 +447,22 @@ public class MainActivity extends FlutterActivity {
         }
         return defaultValue;
     }
+    
+    private double getDoubleValue(Map<String, Object> map, String key, double defaultValue) {
+        Object value = map.get(key);
+        if (value instanceof Number) {
+            return ((Number) value).doubleValue();
+        }
+        return defaultValue;
+    }
+    
+    private boolean getBooleanValue(Map<String, Object> map, String key, boolean defaultValue) {
+        Object value = map.get(key);
+        if (value instanceof Boolean) {
+            return (Boolean) value;
+        }
+        return defaultValue;
+    }
 
     private void copyFile(String src, String dst) throws Exception {
         try (FileInputStream is = new FileInputStream(src);
@@ -447,5 +484,18 @@ public class MainActivity extends FlutterActivity {
         String fileName;
         String md5FileName;
         String targetFilePath;
+        
+        String fontFamily = "Arial";
+        int fontSize = 20;
+        String fontColor = "#ffff0000";
+        String fontBgColor = "#00000000";
+        String windowBgColor = "#00000000";
+        String fontStyle = "NORMAL";
+        String scrollDirection = "MARQUEE_LEFT";
+        double scrollSpeed = 3.0;
+        boolean isHeadTail = false;
+        boolean isStatic = false;
+        int letterSpacing = 0;
+        int lineSpacing = 0;
     }
 }

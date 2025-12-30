@@ -195,7 +195,7 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
         type: ContentType.text,
         x: 0,
         y: 0,
-        w: _ledWidth,
+        w: _ledWidth ~/ 2,
         h: _ledHeight ~/ 2,
         text: "新文字${_windows.length + 1}",
       );
@@ -366,13 +366,16 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
     );
   }
 
+  void _onWindowUpdated() {
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("NovaStar 节目编辑器")),
       body: Column(
         children: [
-          // 画布区域 - 不滚动
           Padding(
             padding: const EdgeInsets.all(12.0),
             child: Column(
@@ -392,7 +395,6 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
             ),
           ),
           Divider(height: 1),
-          // 其他内容 - 可滚动
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(12.0),
@@ -517,57 +519,52 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
   }
 
   Widget _buildLedCanvas() {
-    return RepaintBoundary(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          double maxCanvasWidth = constraints.maxWidth;
-          double aspectRatio = _ledWidth / _ledHeight;
-          double canvasWidth = maxCanvasWidth;
-          double canvasHeight = canvasWidth / aspectRatio;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        double maxCanvasWidth = constraints.maxWidth;
+        double aspectRatio = _ledWidth / _ledHeight;
+        double canvasWidth = maxCanvasWidth;
+        double canvasHeight = canvasWidth / aspectRatio;
 
-          if (canvasHeight > 200) {
-            canvasHeight = 200;
-            canvasWidth = canvasHeight * aspectRatio;
-          }
+        if (canvasHeight > 200) {
+          canvasHeight = 200;
+          canvasWidth = canvasHeight * aspectRatio;
+        }
 
-          double scale = canvasWidth / _ledWidth;
+        double scale = canvasWidth / _ledWidth;
 
-          return Center(
-            child: Container(
-              width: canvasWidth,
-              height: canvasHeight,
-              decoration: BoxDecoration(
-                color: Colors.black,
-                border: Border.all(color: Colors.grey, width: 2),
-              ),
-              child: Stack(
-                children: _windows.map((window) {
-                  return RepaintBoundary(
-                    child: _DraggableWindow(
-                      key: ValueKey(window.id),
-                      window: window,
-                      scale: scale,
-                      canvasWidth: canvasWidth,
-                      canvasHeight: canvasHeight,
-                      ledWidth: _ledWidth,
-                      ledHeight: _ledHeight,
-                      isSelected: window.id == _selectedWindowId,
-                      onTap: () {
-                        setState(() {
-                          _selectedWindowId = window.id;
-                        });
-                      },
-                      onDragEnd: () {
-                        setState(() {});
-                      },
-                    ),
-                  );
-                }).toList(),
-              ),
+        return Center(
+          child: Container(
+            width: canvasWidth,
+            height: canvasHeight,
+            decoration: BoxDecoration(
+              color: Colors.black,
+              border: Border.all(color: Colors.grey, width: 2),
             ),
-          );
-        },
-      ),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: _windows.map((window) {
+                return _DraggableWindow(
+                  key: ValueKey(window.id),
+                  window: window,
+                  scale: scale,
+                  canvasWidth: canvasWidth,
+                  canvasHeight: canvasHeight,
+                  ledWidth: _ledWidth,
+                  ledHeight: _ledHeight,
+                  isSelected: window.id == _selectedWindowId,
+                  onTap: () {
+                    setState(() {
+                      _selectedWindowId = window.id;
+                    });
+                  },
+                  onUpdated: _onWindowUpdated,
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -993,7 +990,8 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
   }
 }
 
-// 独立的可拖拽窗口组件
+// ==================== 可拖拽窗口组件 ====================
+
 class _DraggableWindow extends StatefulWidget {
   final WindowItem window;
   final double scale;
@@ -1003,7 +1001,7 @@ class _DraggableWindow extends StatefulWidget {
   final int ledHeight;
   final bool isSelected;
   final VoidCallback onTap;
-  final VoidCallback onDragEnd;
+  final VoidCallback onUpdated;
 
   const _DraggableWindow({
     Key? key,
@@ -1015,7 +1013,7 @@ class _DraggableWindow extends StatefulWidget {
     required this.ledHeight,
     required this.isSelected,
     required this.onTap,
-    required this.onDragEnd,
+    required this.onUpdated,
   }) : super(key: key);
 
   @override
@@ -1027,7 +1025,6 @@ class _DraggableWindowState extends State<_DraggableWindow> {
   double _top = 0;
   double _width = 0;
   double _height = 0;
-  bool _isDragging = false;
 
   @override
   void initState() {
@@ -1038,7 +1035,11 @@ class _DraggableWindowState extends State<_DraggableWindow> {
   @override
   void didUpdateWidget(_DraggableWindow oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!_isDragging) {
+    if (oldWidget.window.x != widget.window.x ||
+        oldWidget.window.y != widget.window.y ||
+        oldWidget.window.w != widget.window.w ||
+        oldWidget.window.h != widget.window.h ||
+        oldWidget.scale != widget.scale) {
       _syncFromWindow();
     }
   }
@@ -1051,6 +1052,14 @@ class _DraggableWindowState extends State<_DraggableWindow> {
   }
 
   void _syncToWindow() {
+    widget.window.w = (_width / widget.scale).round().clamp(
+      10,
+      widget.ledWidth,
+    );
+    widget.window.h = (_height / widget.scale).round().clamp(
+      10,
+      widget.ledHeight,
+    );
     widget.window.x = (_left / widget.scale).round().clamp(
       0,
       widget.ledWidth - widget.window.w,
@@ -1058,14 +1067,6 @@ class _DraggableWindowState extends State<_DraggableWindow> {
     widget.window.y = (_top / widget.scale).round().clamp(
       0,
       widget.ledHeight - widget.window.h,
-    );
-    widget.window.w = (_width / widget.scale).round().clamp(
-      10,
-      widget.ledWidth - widget.window.x,
-    );
-    widget.window.h = (_height / widget.scale).round().clamp(
-      10,
-      widget.ledHeight - widget.window.y,
     );
   }
 
@@ -1093,47 +1094,46 @@ class _DraggableWindowState extends State<_DraggableWindow> {
         break;
     }
 
-    return Positioned(
-      left: _left,
-      top: _top,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: widget.onTap,
-        onPanStart: (_) {
-          _isDragging = true;
-        },
-        onPanUpdate: (details) {
-          setState(() {
-            _left = (_left + details.delta.dx).clamp(
-              0.0,
-              widget.canvasWidth - _width,
-            );
-            _top = (_top + details.delta.dy).clamp(
-              0.0,
-              widget.canvasHeight - _height,
-            );
-            _syncToWindow();
-          });
-        },
-        onPanEnd: (_) {
-          _isDragging = false;
-          widget.onDragEnd();
-        },
-        child: Container(
-          width: _width,
-          height: _height,
-          decoration: BoxDecoration(
-            color: bgColor,
-            border: Border.all(
-              color: widget.isSelected ? Colors.yellow : borderColor,
-              width: widget.isSelected ? 3 : 2,
-            ),
-          ),
-          child: Stack(
-            children: [
-              Center(
+    // 控制点放在外层 Stack，和窗口平级，优先响应触摸
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        // 1. 窗口主体
+        Positioned(
+          left: _left,
+          top: _top,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: widget.onTap,
+            onPanUpdate: (details) {
+              setState(() {
+                _left = (_left + details.delta.dx).clamp(
+                  0.0,
+                  widget.canvasWidth - _width,
+                );
+                _top = (_top + details.delta.dy).clamp(
+                  0.0,
+                  widget.canvasHeight - _height,
+                );
+              });
+            },
+            onPanEnd: (_) {
+              _syncToWindow();
+              widget.onUpdated();
+            },
+            child: Container(
+              width: _width,
+              height: _height,
+              decoration: BoxDecoration(
+                color: bgColor,
+                border: Border.all(
+                  color: widget.isSelected ? Colors.yellow : borderColor,
+                  width: widget.isSelected ? 3 : 2,
+                ),
+              ),
+              child: Center(
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(typeIcon, color: Colors.white, size: 16),
                     SizedBox(height: 2),
@@ -1148,48 +1148,138 @@ class _DraggableWindowState extends State<_DraggableWindow> {
                   ],
                 ),
               ),
-              if (widget.isSelected)
-                Positioned(
-                  right: 0,
-                  bottom: 0,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onPanStart: (_) {
-                      _isDragging = true;
-                    },
-                    onPanUpdate: (details) {
-                      setState(() {
-                        _width = (_width + details.delta.dx).clamp(
-                          10 * widget.scale,
-                          widget.canvasWidth - _left,
-                        );
-                        _height = (_height + details.delta.dy).clamp(
-                          10 * widget.scale,
-                          widget.canvasHeight - _top,
-                        );
-                        _syncToWindow();
-                      });
-                    },
-                    onPanEnd: (_) {
-                      _isDragging = false;
-                      widget.onDragEnd();
-                    },
-                    child: Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: Colors.yellow,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Icon(
-                        Icons.open_in_full,
-                        size: 14,
-                        color: Colors.black,
-                      ),
-                    ),
+            ),
+          ),
+        ),
+
+        // 2. 四个角的控制点（选中时显示，层级高于窗口）
+        if (widget.isSelected) ...[
+          _buildCornerHandle('topLeft'),
+          _buildCornerHandle('topRight'),
+          _buildCornerHandle('bottomLeft'),
+          _buildCornerHandle('bottomRight'),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildCornerHandle(String corner) {
+    const double hitSize = 44;
+    const double visualSize = 18;
+
+    double posLeft, posTop;
+    switch (corner) {
+      case 'topLeft':
+        posLeft = _left - hitSize / 2;
+        posTop = _top - hitSize / 2;
+        break;
+      case 'topRight':
+        posLeft = _left + _width - hitSize / 2;
+        posTop = _top - hitSize / 2;
+        break;
+      case 'bottomLeft':
+        posLeft = _left - hitSize / 2;
+        posTop = _top + _height - hitSize / 2;
+        break;
+      case 'bottomRight':
+      default:
+        posLeft = _left + _width - hitSize / 2;
+        posTop = _top + _height - hitSize / 2;
+        break;
+    }
+
+    return Positioned(
+      left: posLeft,
+      top: posTop,
+      child: Listener(
+        behavior: HitTestBehavior.opaque,
+        onPointerDown: (_) {
+          widget.onTap();
+        },
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onPanUpdate: (details) {
+            setState(() {
+              final dx = details.delta.dx;
+              final dy = details.delta.dy;
+              final minSize = 10 * widget.scale;
+
+              switch (corner) {
+                case 'topLeft':
+                  final newLeft = (_left + dx).clamp(
+                    0.0,
+                    _left + _width - minSize,
+                  );
+                  final newTop = (_top + dy).clamp(
+                    0.0,
+                    _top + _height - minSize,
+                  );
+                  _width += _left - newLeft;
+                  _height += _top - newTop;
+                  _left = newLeft;
+                  _top = newTop;
+                  break;
+                case 'topRight':
+                  _width = (_width + dx).clamp(
+                    minSize,
+                    widget.canvasWidth - _left,
+                  );
+                  final newTop = (_top + dy).clamp(
+                    0.0,
+                    _top + _height - minSize,
+                  );
+                  _height += _top - newTop;
+                  _top = newTop;
+                  break;
+                case 'bottomLeft':
+                  final newLeft = (_left + dx).clamp(
+                    0.0,
+                    _left + _width - minSize,
+                  );
+                  _width += _left - newLeft;
+                  _left = newLeft;
+                  _height = (_height + dy).clamp(
+                    minSize,
+                    widget.canvasHeight - _top,
+                  );
+                  break;
+                case 'bottomRight':
+                  _width = (_width + dx).clamp(
+                    minSize,
+                    widget.canvasWidth - _left,
+                  );
+                  _height = (_height + dy).clamp(
+                    minSize,
+                    widget.canvasHeight - _top,
+                  );
+                  break;
+              }
+            });
+          },
+          onPanEnd: (_) {
+            _syncToWindow();
+            widget.onUpdated();
+          },
+          child: Container(
+            width: hitSize,
+            height: hitSize,
+            alignment: Alignment.center,
+            child: Container(
+              width: visualSize,
+              height: visualSize,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.blue, width: 2.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black54,
+                    blurRadius: 4,
+                    offset: Offset(1, 1),
                   ),
-                ),
-            ],
+                ],
+              ),
+            ),
           ),
         ),
       ),
