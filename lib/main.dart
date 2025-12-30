@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import 'dart:math';
+import 'program_manager_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -378,6 +381,160 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
     }
   }
 
+  Future<void> _saveProgram() async {
+    if (_windows.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('⚠️ 请先添加至少一个内容窗口')));
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+
+    // 弹窗输入节目名称
+    final TextEditingController nameController = TextEditingController();
+    final String? programName = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('保存节目'),
+        content: TextField(
+          controller: nameController,
+          decoration: InputDecoration(labelText: '节目名称', hintText: '请输入节目名称'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('取消'),
+          ),
+          TextButton(
+            onPressed: () {
+              final name = nameController.text.trim();
+              if (name.isEmpty) {
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text('节目名称不能为空')));
+                return;
+              }
+              Navigator.pop(context, name);
+            },
+            child: Text('保存'),
+          ),
+        ],
+      ),
+    );
+
+    if (programName == null || programName.isEmpty) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'program_$programName';
+
+      // 检查是否重名
+      if (prefs.containsKey(key)) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('❌ 节目名称已存在，请使用其他名称')));
+        }
+        return;
+      }
+
+      // 保存节目数据
+      final programData = {
+        'time': DateTime.now().toString().substring(0, 19),
+        'windows': _windows.map((w) => w.toMap()).toList(),
+      };
+
+      await prefs.setString(key, json.encode(programData));
+
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('✅ 节目保存成功: $programName')));
+        setState(() {
+          _logText = "✅ 节目保存成功: $programName";
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('❌ 保存失败: $e')));
+      }
+    }
+  }
+
+  Future<void> _openProgramManager() async {
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(builder: (context) => ProgramManagerScreen()),
+    );
+
+    // 如果返回了节目数据，则加载它
+    if (result != null) {
+      _loadProgramData(result);
+    }
+  }
+
+  void _loadProgramData(Map<String, dynamic> programData) {
+    try {
+      final windowsData = programData['windows'] as List;
+
+      List<WindowItem> loadedWindows = windowsData.map((data) {
+        return WindowItem(
+          id: data['id'] ?? _generateId(),
+          type: ContentType.values.firstWhere(
+            (e) => e.name == data['type'],
+            orElse: () => ContentType.text,
+          ),
+          x: data['x'] ?? 0,
+          y: data['y'] ?? 0,
+          w: data['w'] ?? 64,
+          h: data['h'] ?? 32,
+          text: data['text'] ?? '',
+          fontFamily: data['fontFamily'] ?? 'Arial',
+          fontSize: data['fontSize'] ?? 20,
+          fontColor: _parseColor(data['fontColor'] ?? '#ffff0000'),
+          fontStyle: data['fontStyle'] ?? 'NORMAL',
+          scrollDirection: data['scrollDirection'] ?? 'MARQUEE_LEFT',
+          scrollSpeed: (data['scrollSpeed'] ?? 3.0).toDouble(),
+          isHeadTail: data['isHeadTail'] ?? false,
+          isStatic: data['isStatic'] ?? false,
+          letterSpacing: data['letterSpacing'] ?? 0,
+          lineSpacing: data['lineSpacing'] ?? 0,
+          fontBgColor: _parseColor(data['fontBgColor'] ?? '#00000000'),
+          windowBgColor: _parseColor(data['windowBgColor'] ?? '#00000000'),
+          filePath: data['filePath'] ?? '',
+          fileName: data['fileName'] ?? '',
+        );
+      }).toList();
+
+      setState(() {
+        _windows = loadedWindows;
+        _selectedWindowId = _windows.isNotEmpty ? _windows.first.id : null;
+        _logText = "✅ 节目加载成功，共 ${_windows.length} 个窗口";
+      });
+      _updateControllersFromWindow();
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('✅ 节目加载成功')));
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('❌ 加载失败: $e')));
+    }
+  }
+
+  Color _parseColor(String colorStr) {
+    try {
+      return Color(int.parse(colorStr.substring(1), radix: 16));
+    } catch (e) {
+      return Colors.transparent;
+    }
+  }
+
   void _pickColor(String type) {
     if (_selectedWindow == null) return;
     showDialog(
@@ -438,7 +595,16 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("NovaStar 节目编辑器")),
+      appBar: AppBar(
+        title: const Text("NovaStar 节目编辑器"),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.folder),
+            onPressed: _openProgramManager,
+            tooltip: '节目管理',
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Padding(
@@ -472,6 +638,21 @@ class _NovaEditorScreenState extends State<NovaEditorScreen> {
                   Divider(height: 20),
                   if (_selectedWindow != null) _buildPropertyEditor(),
                   Divider(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: _windows.isNotEmpty ? _saveProgram : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                      ),
+                      child: Text(
+                        "💾 保存节目 (${_windows.length} 个窗口)",
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 10),
                   SizedBox(
                     width: double.infinity,
                     height: 50,
